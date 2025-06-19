@@ -1,8 +1,9 @@
 from logging import getLogger
+from typing import Any, Dict, Optional
 
 from asyncpg import Pool
 
-from appkit import Component
+from adc_appkit import Component
 from pg_utils import create_db_pool
 
 logger = getLogger(__name__)

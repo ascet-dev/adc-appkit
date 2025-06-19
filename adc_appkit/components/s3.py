@@ -1,6 +1,7 @@
 from logging import getLogger
+from typing import Any, Dict, Optional
 
-from appkit import Component
+from adc_appkit import Component
 from s3_utils.client import S3Client
 
 logger = getLogger(__name__)

@@ -1,9 +1,10 @@
 import inspect
 import asyncio
 from graphlib import TopologicalSorter
-from appkit.component import Component
-from appkit.service import Service
-from typing import Type, Any, Dict
+from typing import Any, Dict, List, Optional, Type
+
+from adc_appkit.component import Component
+from adc_appkit.service import Service
 
 
 class Bind:

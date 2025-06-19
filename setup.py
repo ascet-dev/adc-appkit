@@ -20,17 +20,18 @@ def get_packages(package):
 
 
 setup(
-    name='appkit',
+    name='adc-appkit',
     version='0.1.0',
     url='https://github.com/ascet-dev/adc-appkit',
     python_requires='>=3.8',
     install_requires=[
+        # No external dependencies - this is a base library
     ],
     license='MIT',
-    description='FastAPI application toolkit with component-based architecture',
+    description='Component-based application toolkit with lifecycle management',
     long_description=get_long_description(),
     long_description_content_type='text/markdown',
-    packages=get_packages('appkit'),
+    packages=get_packages('adc_appkit'),
     include_package_data=True,
     data_files=[('', [])],
     classifiers=[
@@ -42,7 +43,6 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
-        'Framework :: FastAPI',
     ],
     zip_safe=False,
 )
