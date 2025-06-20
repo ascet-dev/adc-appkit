@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from asyncpg import Pool
 
 from adc_appkit import Component
-from pg_utils import create_db_pool
+from adc_aiopg import create_db_pool
 
 logger = getLogger(__name__)
 

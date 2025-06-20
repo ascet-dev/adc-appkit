@@ -2,7 +2,7 @@ from logging import getLogger
 from typing import Any, Dict, Optional
 
 from adc_appkit import Component
-from s3_utils.client import S3Client
+from adc_aios3.client import S3Client
 
 logger = getLogger(__name__)
 

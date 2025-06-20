@@ -2,7 +2,7 @@ from logging import getLogger
 from typing import TypeVar, Any, Dict, Optional
 
 from adc_appkit import Component
-from pg_utils.repository import PostgresAccessLayer
+from adc_aiopg.repository import PostgresAccessLayer
 
 logger = getLogger(__name__)
 
