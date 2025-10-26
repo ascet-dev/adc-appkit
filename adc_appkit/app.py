@@ -1,107 +1,97 @@
-import inspect
-import asyncio
-from graphlib import TopologicalSorter
-from typing import Any, Dict, List, Optional, Type
+"""
+Примеры использования ADC AppKit.
 
-from adc_appkit.component import Component
-from adc_appkit.service import Service
+Этот модуль содержит примеры создания приложений с использованием
+декларативных компонентов, DI контейнера и request scope.
+"""
 
-
-class Bind:
-    def __init__(self, cls: Type[Service], *, mode: str = "app"):
-        self.cls = cls
-        self.mode = mode  # 'app' | 'lazy'
-        self._name: str = ""
-
-    def bind_name(self, name: str):
-        self._name = name
-
-    def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        if self.mode == "lazy":
-            return self._factory(instance)
-        return self
-
-    def _factory(self, app_instance):
-        def create_instance(**kwargs):
-            deps = inspect.signature(self.cls.create).parameters
-            resolved = {
-                k: getattr(app_instance, k)
-                for k in deps
-                if hasattr(app_instance, k)
-            }
-            resolved.update(kwargs)
-            return self.cls(**resolved)
-        return create_instance
+from adc_appkit.base_app import BaseApp
+from adc_appkit.component_manager import component, ComponentStrategy
+from adc_appkit.components.pg import PG
+from adc_appkit.components.http import HTTP
+from adc_appkit.components.s3 import S3
+from adc_appkit.components.dao import PGDataAccessLayer
 
 
-class App:
-    def __init__(self):
-        self._components: dict[str, Component] = {}
-        self._services: dict[str, Type[Service]] = {}
-        self._component_objs: dict[str, Any] = {}
-        self._service_objs: dict[str, Any] = {}
+# ======================= Пример простого приложения =======================
 
-        for name, attr in inspect.getmembers(self):
-            if isinstance(attr, Component):
-                self._components[name] = attr
-            elif isinstance(attr, Bind):
-                attr.bind_name(name)
-                if attr.mode == "app":
-                    self._services[name] = attr.cls
-                setattr(self, name, attr)
+class SimpleApp(BaseApp):
+    """Пример простого приложения с базовыми компонентами."""
+    
+    # HTTP клиент - создается на каждый запрос
+    http = component(
+        HTTP,
+        strategy=ComponentStrategy.REQUEST,
+        config_key="http"
+    )
+    
+    # PostgreSQL соединение - singleton
+    pg = component(
+        PG,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="pg",
+        depends_on=[HTTP]  # PG может зависеть от HTTP для порядка старта
+    )
+    
+    # S3 клиент - singleton
+    s3 = component(
+        S3,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="s3"
+    )
+    
+    # DAO слой - singleton
+    dao = component(
+        PGDataAccessLayer,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="dao",
+        depends_on=["pg"]
+    )
 
-    async def start(self):
-        graph = self._build_dependency_graph()
-        sorter = TopologicalSorter(graph)
 
-        for name in sorter.static_order():
-            if name in self._components:
-                component = self._components[name]
-                await component.start()
-                self._component_objs[name] = component.obj
+# ======================= Пример сложного приложения =======================
 
-            elif name in self._services:
-                service_cls = self._services[name]
-                deps = inspect.signature(service_cls.create).parameters
+class ExternalAPI(HTTP):
+    """Кастомный HTTP клиент для внешнего API."""
+    
+    async def call_api(self, endpoint: str) -> str:
+        """Вызов внешнего API."""
+        # Здесь была бы реальная логика вызова API
+        return f"API call to {endpoint}"
 
-                kwargs = {
-                    k: self._component_objs.get(k) or self._service_objs.get(k)
-                    for k in deps
-                    if k in self._component_objs or k in self._service_objs
-                }
 
-                instance = await service_cls.create(**kwargs)
-                self._service_objs[name] = instance
-                setattr(self, name, instance)
-
-    async def stop(self):
-        for service in reversed(self._service_objs.values()):
-            if hasattr(service, 'stop'):
-                await service.stop()
-        for component in reversed(self._components.values()):
-            await component.stop()
-
-    async def is_alive(self) -> dict[str, bool]:
-        names = list(self._components.keys())
-        coroutines = [component.is_alive for component in self._components.values()]
-        results = await asyncio.gather(*coroutines, return_exceptions=True)
-
-        return {name: result is True for name, result in zip(names, results)}
-
-    def _build_dependency_graph(self) -> Dict[str, set[str]]:
-        graph: dict[str, set[str]] = {}
-
-        for name, comp in self._components.items():
-            deps = comp.dependencies or {}
-            graph[name] = set(deps.keys())
-
-        for name, cls in self._services.items():
-            deps = inspect.signature(cls.create).parameters
-            graph[name] = {
-                dep for dep in deps
-                if dep in self._components or dep in self._services
-            }
-
-        return graph
+class ComplexApp(BaseApp):
+    """Пример сложного приложения с несколькими компонентами одного типа."""
+    
+    # Несколько HTTP клиентов с разными конфигурациями
+    main_http = component(
+        HTTP, 
+        strategy=ComponentStrategy.REQUEST, 
+        config_key="main_http"
+    )
+    api_http = component(
+        ExternalAPI, 
+        strategy=ComponentStrategy.REQUEST, 
+        config_key="api_http"
+    )
+    
+    # Несколько PG соединений
+    main_pg = component(
+        PG,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="main_pg",
+        depends_on=["main_http"],  # зависит от main_http
+    )
+    analytics_pg = component(
+        PG,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="analytics_pg",
+        depends_on=["api_http"],  # зависит от api_http
+    )
+    
+    # S3 клиент
+    s3 = component(
+        S3,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="s3"
+    )

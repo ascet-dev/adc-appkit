@@ -4,8 +4,10 @@ from logging import getLogger
 
 logger = getLogger(__name__)
 
+T = t.TypeVar('T')
 
-class Component[T](ABC):
+
+class Component(ABC, t.Generic[T]):
     """Базовый класс для всех компонентов приложения."""
 
     def __init__(self):

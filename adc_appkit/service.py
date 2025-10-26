@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Self
+from typing import TypeVar
+
+T = TypeVar('T', bound='Service')
 
 
 class Service(ABC):
 
     @classmethod
     @abstractmethod
-    async def create(cls, **kwargs) -> Self:
+    async def create(cls, **kwargs) -> T:
         pass
 
     async def stop(self) -> None:
