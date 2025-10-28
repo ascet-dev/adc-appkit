@@ -8,7 +8,7 @@
 import asyncio
 from typing import Dict, Any
 
-from adc_appkit import BaseApp, component, ComponentStrategy
+from adc_appkit import BaseApp, component, ComponentStrategy, create_component
 from adc_appkit.components.component import Component
 
 
@@ -330,6 +330,172 @@ async def run_complex_app():
         await app.stop()
 
 
+# ======================= Пример 3: Компоненты на лету =======================
+
+class SimpleService:
+    """Простой сервис без сложной логики."""
+    
+    def __init__(self, name: str, version: str = "1.0.0", **kwargs):
+        self.name = name
+        self.version = version
+        self.config = kwargs
+        self.closed = False
+    
+    async def process(self, data: str) -> str:
+        return f"{self.name} v{self.version} processed: {data}"
+    
+    async def close(self):
+        self.closed = True
+    
+    async def is_alive(self) -> bool:
+        return not self.closed
+
+
+class DataProcessor:
+    """Обработчик данных с простой инициализацией."""
+    
+    def __init__(self, batch_size: int = 100, timeout: int = 30, **kwargs):
+        self.batch_size = batch_size
+        self.timeout = timeout
+        self.config = kwargs
+        self.closed = False
+    
+    async def process_batch(self, items: list) -> list:
+        return [f"Processed: {item} (batch_size={self.batch_size})" for item in items]
+    
+    def close(self):  # Синхронный close
+        self.closed = True
+
+
+class CustomService(Component[SimpleService]):
+    """Кастомный компонент с init_kwargs."""
+    
+    def __init__(self, **init_kwargs):
+        super().__init__(**init_kwargs)
+    
+    async def _start(self, **kwargs) -> SimpleService:
+        return SimpleService(**kwargs)
+    
+    async def _stop(self) -> None:
+        await self.obj.close()
+    
+    async def is_alive(self) -> bool:
+        return await self.obj.is_alive()
+
+
+class DynamicApp(BaseApp):
+    """Приложение с компонентами, созданными на лету."""
+    
+    # Создаем компоненты на лету
+    service = component(
+        create_component(SimpleService),
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="service"
+    )
+    
+    processor = component(
+        create_component(DataProcessor),
+        strategy=ComponentStrategy.REQUEST,
+        config_key="processor"
+    )
+    
+    # Компонент без предустановленных параметров
+    simple_processor = component(
+        create_component(DataProcessor),
+        strategy=ComponentStrategy.REQUEST,
+        config_key="simple_processor"
+    )
+    
+    # Кастомный компонент
+    custom_service = component(
+        CustomService,
+        strategy=ComponentStrategy.SINGLETON,
+        config_key="custom_service"
+    )
+    
+    async def business_logic(self):
+        """Пример использования компонентов, созданных на лету."""
+        
+        print("=== Dynamic App Business Logic ===")
+        
+        # Используем singleton сервис
+        service = self.service
+        await service.start()
+        
+        result = await service.obj.process("test data")
+        print(f"Service result: {result}")
+        print(f"Service config: {service.obj.config}")
+        
+        # Используем кастомный сервис
+        custom_service = self.custom_service
+        await custom_service.start()
+        
+        custom_result = await custom_service.obj.process("custom data")
+        print(f"Custom service result: {custom_result}")
+        print(f"Custom service config: {custom_service.obj.config}")
+        
+        # Используем request-scoped процессор в scope
+        async with self.request_scope() as req:
+            processor = req.processor
+            await processor.start()
+            
+            # Процессор получит batch_size=50 из init_kwargs + config из конфига
+            batch_result = await processor.obj.process_batch(["item1", "item2", "item3"])
+            print(f"Processor result: {batch_result}")
+            print(f"Processor config: {processor.obj.config}")
+            
+            # Простой процессор без предустановок
+            simple_proc = req.simple_processor
+            await simple_proc.start()
+            
+            simple_result = await simple_proc.obj.process_batch(["simple1", "simple2"])
+            print(f"Simple processor result: {simple_result}")
+            print(f"Simple processor config: {simple_proc.obj.config}")
+
+
+async def run_dynamic_app():
+    """Запуск приложения с динамическими компонентами."""
+    
+    # Конфигурация для динамических компонентов
+    dynamic_config = {
+        "service": {
+            "name": "MyService",
+            "version": "2.0.0",
+            "debug": True,
+            "log_level": "INFO"
+        },
+        "processor": {
+            "batch_size": 50,
+            "timeout": 60,
+            "debug": True
+        },
+        "simple_processor": {
+            "batch_size": 200,
+            "timeout": 45
+        },
+        "custom_service": {
+            "name": "CustomService",
+            "version": "4.0.0",
+            "debug": True,
+            "log_level": "DEBUG"
+        }
+    }
+    
+    app = DynamicApp(components_config=dynamic_config)
+    
+    try:
+        print("Starting dynamic app...")
+        await app.start()
+        
+        print("Dynamic app health:", await app.healthcheck())
+        
+        await app.business_logic()
+        
+    finally:
+        print("Stopping dynamic app...")
+        await app.stop()
+
+
 async def main():
     """Главная функция для запуска примеров."""
     
@@ -342,6 +508,10 @@ async def main():
     # Запускаем сложное приложение
     print("\n=== Complex App ===")
     await run_complex_app()
+    
+    # Запускаем приложение с динамическими компонентами
+    print("\n=== Dynamic App ===")
+    await run_dynamic_app()
 
 
 if __name__ == "__main__":

@@ -18,7 +18,6 @@ class HTTP(Component[ClientSession]):
 
     async def is_alive(self) -> bool:
         try:
-            # Простая проверка - попытка создать запрос
             return not self.obj.closed
         except Exception:
             return False

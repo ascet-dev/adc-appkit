@@ -13,7 +13,7 @@ class Component(ABC, t.Generic[T]):
     def __init__(self):
         self._config: t.Optional[t.Dict[str, t.Any]] = None
         self._obj: t.Optional[T] = None
-        self._app: t.Optional[t.Any] = None  # Будет установлен при старте приложения
+        self._app: t.Optional[t.Any] = None
         self._started = False
 
     @property
@@ -78,3 +78,39 @@ class Component(ABC, t.Generic[T]):
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.stop()
+
+
+def create_component(cls: t.Type[T]) -> Component[T]:
+    class _WrappedComponent(Component[T]):    
+        async def _start(self, **config_kwargs) -> T:
+            return cls(**config_kwargs)
+        
+        async def _stop(self) -> None:
+            # Если у объекта есть метод close, вызываем его
+            if hasattr(self.obj, 'close') and callable(getattr(self.obj, 'close')):
+                import inspect
+                if inspect.iscoroutinefunction(self.obj.close):
+                    await self.obj.close()
+                else:
+                    self.obj.close()
+        
+        async def is_alive(self) -> bool:
+            # Если у объекта есть метод is_alive, используем его
+            if hasattr(self.obj, 'is_alive') and callable(getattr(self.obj, 'is_alive')):
+                import inspect
+                if inspect.iscoroutinefunction(self.obj.is_alive):
+                    return await self.obj.is_alive()
+                else:
+                    return self.obj.is_alive()
+            
+            # Если у объекта есть атрибут closed, проверяем его
+            if hasattr(self.obj, 'closed'):
+                return not self.obj.closed
+            
+            # По умолчанию считаем живым
+            return True
+
+    _WrappedComponent.__name__ = f"Component[{cls.__name__}]"
+    _WrappedComponent.__qualname__ = f"Component[{cls.__name__}]"
+    
+    return _WrappedComponent

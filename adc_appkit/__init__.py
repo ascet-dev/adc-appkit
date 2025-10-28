@@ -1,5 +1,5 @@
 from .base_app import BaseApp
-from .components.component import Component
+from .components.component import Component, create_component
 from .component_manager import (
     ComponentDescriptor,
     ComponentStrategy,
@@ -12,6 +12,7 @@ from .service import Service
 __all__ = [
     "BaseApp", 
     "Component",
+    "create_component",
     "ComponentDescriptor",
     "ComponentStrategy",
     "ComponentState",
