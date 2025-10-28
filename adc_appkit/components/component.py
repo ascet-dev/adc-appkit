@@ -1,29 +1,40 @@
 import typing as t
 from abc import ABC, abstractmethod
 from logging import getLogger
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from adc_appkit.base_app import BaseApp
 
 logger = getLogger(__name__)
 
 T = t.TypeVar('T')
+
+# Type aliases для лучшей читаемости и безопасности типов
+ConfigDict = t.Dict[str, t.Any]
 
 
 class Component(ABC, t.Generic[T]):
     """Базовый класс для всех компонентов приложения."""
 
     def __init__(self):
-        self._config: t.Optional[t.Dict[str, t.Any]] = None
+        self._config: t.Optional[ConfigDict] = None
         self._obj: t.Optional[T] = None
-        self._app: t.Optional[t.Any] = None
+        self._app: t.Optional["BaseApp"] = None
         self._started = False
 
     @property
-    def config(self) -> t.Optional[t.Dict[str, t.Any]]:
+    def config(self) -> t.Optional[ConfigDict]:
         """Конфигурация компонента."""
         return self._config
 
-    def set_config(self, config: t.Dict[str, t.Any]) -> None:
+    def set_config(self, config: ConfigDict) -> None:
         """Устанавливает конфигурацию компонента."""
         self._config = config
+
+    def set_app(self, app: "BaseApp") -> None:
+        """Устанавливает ссылку на приложение."""
+        self._app = app
 
     @property
     def obj(self) -> T:
@@ -80,7 +91,7 @@ class Component(ABC, t.Generic[T]):
         await self.stop()
 
 
-def create_component(cls: t.Type[T]) -> Component[T]:
+def create_component(cls: t.Type[T]) -> t.Type[Component[T]]:
     class _WrappedComponent(Component[T]):    
         async def _start(self, **config_kwargs) -> T:
             return cls(**config_kwargs)
