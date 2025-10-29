@@ -109,18 +109,8 @@ class ComponentDescriptor(Generic[C]):
     def __get__(self, instance, owner) -> C:
         if instance is None:
             return self  # доступ через класс
-        # получаем компонент через контейнер приложения; IDE тип понимает через cast
-        # Получаем текущий scope из ContextVar
-        current_scope = instance._current_scope.get()
-        
-        # Для REQUEST компонентов проверяем, что scope установлен
-        if self.strategy == ComponentStrategy.REQUEST and current_scope is None:
-            raise RuntimeError(
-                f"REQUEST component '{self.name}' can only be accessed within request scope. "
-                f"Use 'async with app.request_scope() as req: req.{self.name}'"
-            )
-        
-        comp = instance._container.get_component(self.name, scope_cache=current_scope)
+        # получаем SINGLETON компонент через контейнер приложения; IDE тип понимает через cast
+        comp = instance._container.get_component(self.name)
         return cast(C, comp)
 
 

@@ -1,13 +1,12 @@
 """
 Модуль базового класса приложения.
 
-Содержит BaseApp класс для создания приложений с декларативными компонентами,
-DI контейнером и request scope.
+Содержит BaseApp класс для создания приложений с декларативными компонентами
+и DI контейнером для SINGLETON компонентов.
 """
 
 import inspect
 from typing import Any, Dict, List, Optional
-from contextvars import ContextVar
 
 from adc_appkit.components.component import Component
 from adc_appkit.component_manager import ComponentDescriptor, ComponentStrategy, ComponentState, ComponentInfo, ConfigDict, ComponentName
@@ -15,14 +14,10 @@ from adc_appkit.di_container import DIContainer
 
 # Type aliases для лучшей читаемости
 ComponentsConfig = Dict[ComponentName, ConfigDict]
-ScopeCache = Dict[ComponentName, Component]
-
-# глобальный contextvar для текущего request scope
-_current_scope_var: ContextVar[Optional[ScopeCache]] = ContextVar("_current_scope", default=None)
 
 
 class BaseApp:
-    """Базовый класс приложения с декларативными компонентами, DI и request scope."""
+    """Базовый класс приложения с декларативными SINGLETON компонентами и DI контейнером."""
 
     def __init__(self, *, components_config: ComponentsConfig):
         # собираем все ComponentDescriptor
@@ -42,9 +37,6 @@ class BaseApp:
 
         # список стартовавших singleton-ов
         self._started_singletons: List[ComponentName] = []
-
-        # текущий scope cache для request-компонентов в этом таске
-        self._current_scope: ContextVar[Optional[ScopeCache]] = _current_scope_var
 
     # ------ публичные удобства ------
 
@@ -72,9 +64,8 @@ class BaseApp:
             raise RuntimeError(f"Component '{name}' is not configured")
         
         try:
-            # Для singleton компонентов не передаем scope_cache (он не нужен)
-            # Для request компонентов scope_cache не должен использоваться при старте
-            inst = self._container.get_component(name, scope_cache=None)
+            # Получаем экземпляр SINGLETON компонента
+            inst = self._container.get_component(name)
             if inst.config is None:
                 raise RuntimeError(f"Config for component '{name}' is not set")
             inst.set_app(self)
@@ -143,43 +134,3 @@ class BaseApp:
             results[name] = bool(ok)
         return results
 
-    # ------ request scope ------
-
-    class _RequestScopeManager:
-        def __init__(self, app: "BaseApp"):
-            self.app = app
-            self._token: Optional[object] = None
-            self._cache: ScopeCache = {}
-            self._closed: bool = False
-
-        async def __aenter__(self):
-            # устанавливаем кэш в contextvar
-            self._token = self.app._current_scope.set(self._cache)
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            # закрываем все request-компоненты, у которых есть stop()
-            for comp in self._cache.values():
-                if hasattr(comp, "stop"):
-                    res = comp.stop()
-                    if inspect.isawaitable(res):
-                        await res
-            self._cache.clear()
-            self._closed = True
-            # возвращаем старое значение contextvar
-            if self._token is not None:
-                self.app._current_scope.reset(self._token)
-
-        # доступ к компонентам внутри scope как к атрибутам
-        def __getattr__(self, name: str) -> Component:
-            return self.app._container.get_component(name, scope_cache=self._cache)
-
-    def request_scope(self) -> "_RequestScopeManager":
-        """
-        Использование:
-            async with app.request_scope() as req:
-                client = req.http
-                ...
-        Внутри scope один экземпляр request-компонента на весь scope; по exit() — авто stop().
-        """
-        return BaseApp._RequestScopeManager(self)

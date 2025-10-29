@@ -50,41 +50,56 @@ class DIContainer:
             info.set_state(ComponentState.ERROR)
             raise RuntimeError(f"Failed to configure component '{name}': {e}") from e
 
-    def get_component(self, name: ComponentName, *, scope_cache: Optional[Dict[ComponentName, Component]] = None) -> Component:
-        """Получает экземпляр компонента. Для REQUEST — кэширует в scope_cache (если дан)."""
+    def get_component(self, name: ComponentName, *, _visited: Optional[set] = None) -> Component:
+        """Получает экземпляр SINGLETON компонента."""
         if name not in self._components:
             raise ValueError(f"Component {name} not registered")
         info = self._components[name]
+        
+        # Проверяем, что компонент сконфигурирован
+        if info.config is None:
+            raise RuntimeError(f"Component '{name}' is not configured")
+        
+        # Проверяем, что это SINGLETON компонент
+        if info.strategy != ComponentStrategy.SINGLETON:
+            raise RuntimeError(f"Component '{name}' is not a SINGLETON component")
+        
+        # Если компонент уже создан, возвращаем его БЕЗ сложной логики
+        if name in self._instances:
+            return self._instances[name]
+        
+        # Инициализируем множество посещенных компонентов для защиты от циклических зависимостей
+        if _visited is None:
+            _visited = set()
+        
+        # Проверяем на циклические зависимости
+        if name in _visited:
+            cycle = " -> ".join(list(_visited) + [name])
+            raise RuntimeError(f"Circular dependency detected: {cycle}")
+        
         # Собираем конфигурацию с зависимостями
         config = {**info.config}
         
-        # Добавляем зависимости
+        # Добавляем зависимости (зависимости имеют приоритет над конфигурацией)
         for k, v in info.dependencies.items():
-            dep_component = self.get_component(v, scope_cache=scope_cache)
-            # Для SINGLETON компонентов передаем объект, если он запущен
-            if dep_component.started:
+            # Добавляем текущий компонент в посещенные
+            _visited.add(name)
+            try:
+                dep_component = self.get_component(v, _visited=_visited)
+                
+                # Зависимости должны быть уже запущены
+                if not dep_component.started:
+                    raise RuntimeError(
+                        f"SINGLETON component '{name}' depends on '{v}' which is not started. "
+                        f"Ensure dependencies are started before dependent components."
+                    )
                 config[k] = dep_component.obj
-            else:
-                # Если зависимость не запущена, передаем сам компонент
-                config[k] = dep_component
+            finally:
+                # Убираем текущий компонент из посещенных
+                _visited.discard(name)
 
-        if info.strategy == ComponentStrategy.SINGLETON:
-            if name not in self._instances:
-                inst = info.component_type()
-                inst.set_config(config)
-                self._instances[name] = inst
-            return self._instances[name]
-
-        # REQUEST
-        if scope_cache is not None:
-            # один объект на scope
-            if name not in scope_cache:
-                inst = info.component_type()
-                inst.set_config(config)
-                scope_cache[name] = inst
-            return scope_cache[name]
-        
-        # вне scope — создаём каждый раз новый объект
+        # Создаем экземпляр компонента
         inst = info.component_type()
         inst.set_config(config)
+        self._instances[name] = inst
         return inst
