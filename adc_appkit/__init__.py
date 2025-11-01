@@ -1,22 +1,23 @@
-from .base_app import BaseApp
-from .components.component import Component, create_component
-from .component_manager import (
+"""
+Appkit - компонентная архитектура для Python приложений.
+
+Это упрощенная и улучшенная версия архитектуры appkit.
+"""
+
+from adc_appkit.base_app import BaseApp
+from adc_appkit.component_manager import (
     ComponentDescriptor,
     ComponentStrategy,
-    ComponentState,
     component,
 )
-from .di_container import DIContainer
-from .service import Service
+from adc_appkit.di_container import DIContainer
+from adc_appkit.request_scope import RequestScope
 
 __all__ = [
-    "BaseApp", 
-    "Component",
-    "create_component",
+    "BaseApp",
     "ComponentDescriptor",
     "ComponentStrategy",
-    "ComponentState",
-    "component",
     "DIContainer",
-    "Service",
+    "RequestScope",
+    "component",
 ]
