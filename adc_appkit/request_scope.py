@@ -51,8 +51,7 @@ class RequestScope:
             inst.set_app(self.app)
             
             # Базовый конфиг из config_key + ctx
-            cfg = (info.config or {}).copy()
-            cfg.setdefault("ctx", self.ctx)
+            cfg = (info.config.get(info.config_key) or {}).copy()
             inst.set_config(cfg)
             
             self.cache[component_name] = inst
@@ -68,7 +67,6 @@ class RequestScope:
             # Пересобираем конфиг с .obj зависимостей (зависимости уже запущены в топологическом порядке)
             info = self.app._container.components[component_name]
             cfg = self.app._container._build_config_with_dependencies(component_name, info, scope=self.cache)
-            cfg.setdefault("ctx", self.ctx)  # Убеждаемся что ctx есть
             component.set_config(cfg)
             
             # Запускаем компонент
